@@ -11,14 +11,19 @@ from utils import array_tool
 def decom_vgg16():
     # the 30th layer of features is relu of conv5_3
     model = vgg16(True)
-
-    # extractor = # 根据PPT上所示的Extractor网络架构图，补全extractor
+# 根据PPT上所示的Extractor网络架构图，补全extractor
+    extractor = model.features
+    classifier = list(extractor)
+    del extractor[-1]
+    
+       
+    
     classifier = model.classifier
 
     classifier = list(classifier)
-    del classifier[2]
-    del classifier[5]
     del classifier[6]
+    del classifier[5]
+    del classifier[2]
     classifier = nn.Sequential(*classifier)
 
     # freeze top4 conv
@@ -96,8 +101,10 @@ class VGG16RoIHead(nn.Module):
         super(VGG16RoIHead, self).__init__()
 
         self.classifier = classifier
-        # self.cls_loc = # 线性层用于回归任务
-        # self.score = # 线性层用于分类任务
+        # 线性层用于回归任务
+        self.cls_loc = nn.Linear(in_features=4096, out_features=n_class*4)
+        # 线性层用于分类任务
+        self.score = nn.Linear(in_features=4096, out_features=n_class)
 
         normal_init(self.cls_loc, 0, 0.001)
         normal_init(self.score, 0, 0.01)
@@ -105,7 +112,8 @@ class VGG16RoIHead(nn.Module):
         self.n_class = n_class
         self.roi_size = roi_size
         self.spatial_scale = spatial_scale
-        # self.roi = # ROIPooling层
+        self.roi = RoIPool(roi_size, spatial_scale)
+        
 
     def forward(self, x, rois, roi_indices):
         """Forward the chain.
@@ -133,6 +141,12 @@ class VGG16RoIHead(nn.Module):
         indices_and_rois = xy_indices_and_rois.contiguous()
 
         pool = self.roi(x, indices_and_rois)
+        #TODO
+        cls_in = nn.flatten(pool)
+        cls_out = self.classifier(cls_in)
+        roi_cls_locs = self.cls_loc(cls_out)
+        roi_scores = self.score(cls_out)
+        
         
         return roi_cls_locs, roi_scores
     
