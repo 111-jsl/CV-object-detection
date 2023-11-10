@@ -142,7 +142,7 @@ class VGG16RoIHead(nn.Module):
 
         pool = self.roi(x, indices_and_rois)
         #TODO
-        cls_in = nn.flatten(pool)
+        cls_in = torch.flatten(pool,1)
         cls_out = self.classifier(cls_in)
         roi_cls_locs = self.cls_loc(cls_out)
         roi_scores = self.score(cls_out)
