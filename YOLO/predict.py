@@ -35,8 +35,10 @@ def decoder(pred):
     pred = pred.data  # torch.Size([1, 14, 14, 30])
     pred = pred.squeeze(0)  # torch.Size([14, 14, 30])
     # [中心坐标,长宽,置信度,中心坐标,长宽,置信度, 20个类别] x 7x7
-    # contain1 = # 从pred中取出bbox1的置信度
-    # contain2 = # 从pred中取出bbox2的置信度
+    # 从pred中取出bbox1的置信度
+    contain1 = pred[:,:,4]
+    # 从pred中取出bbox2的置信度
+    contain2 = pred[:,:,9]
     contain = torch.cat((contain1, contain2), 2) # torch.Size([14, 14, 2])
 
     mask1 = contain > 0.1 # 大于阈值, torch.Size([14, 14, 2]) content: tensor([False, False])
@@ -48,15 +50,21 @@ def decoder(pred):
         for j in range(grid_num):
             for b in range(2):
                 if mask[i, j, b] == 1:
-                    # box = # 从pred中取出bbox的中心坐标及宽高
-                    # contain_prob = # 从pred中取出bbox的置信度
+                    # 从pred中取出bbox的中心坐标及宽高
+                    box = pred[i,j,b*5:b*5+4]
+                    # 从pred中取出bbox的置信度
+                    contain_prob = pred[i,j,b*5+4]
                     xy = torch.FloatTensor([j, i]) * cell_size # cell左上角 up left of cell
                     box[:2] = box[:2] * cell_size + xy # return cxcy relative to image
                     box_xy = torch.FloatTensor(box.size()) # 转换成xy形式 convert[cx, cy, w, h] to [x1, y1, x2, y2]
                     # box[:2]是bbox的中心坐标，box[2:]是bbox的宽高
-                    # box_xy[:2] = # 计算出bbox左上角的坐标
-                    # box_xy[2:] = # 计算出bbox右下角的坐标
-                    # max_prob, cls_index = # 从pred中取出20个类别的概率，并得到最大值及其索引
+                    # 计算出bbox左上角的坐标
+                    box_xy[:2] = box[:2] - box[2:]/2
+                    # 计算出bbox右下角的坐标
+                    box_xy[2:] = box[:2] + box[2:]/2
+                    # 从pred中取出20个类别的概率，并得到最大值及其索引
+                    related_index = torch.argmax(pred[i,j,10:])
+                    max_prob, cls_index = pred[i,j,10+related_index], related_index
                     if float((contain_prob * max_prob)[0]) > 0.1:
                         boxes.append(box_xy.view(1, 4))
                         cls_indexs.append(cls_index.item())
@@ -94,7 +102,11 @@ def nms(bboxes, scores, threshold=0.5):
         keep.append(i)
 
         # 计算box[i]与其余各框box[order[1:]]的IOU
-        # ovr = 
+        intersect_ul_points = torch.max(bboxes[i,:2], bboxes[order[1:],:2])
+        intersect_dr_points = torch.max(bboxes[i,2:], bboxes[order[1:],2:])
+        diffs = intersect_dr_points - intersect_ul_points
+        intersect_areas = diffs[:,0] * diffs[:,1]
+        ovr = intersect_areas / (areas[i] + areas[order[1:]] - intersect_areas)
         ids = (ovr <= threshold).nonzero(as_tuple=False).squeeze() # 注意此时idx为[N - 1,], 而order为[N, ]
         if ids.numel() == 0:
             break
