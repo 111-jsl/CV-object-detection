@@ -54,11 +54,6 @@ def loc2bbox(src_bbox, loc):
     src_width = src_bbox[:, 3] - src_bbox[:, 1]
     src_ctr_y = src_bbox[:, 0] + 0.5 * src_height
     src_ctr_x = src_bbox[:, 1] + 0.5 * src_width
-    src_height = src_height.reshape(-1, 1)
-    src_width = src_width.reshape(-1,1)
-    src_ctr_y = src_ctr_y.reshape(-1,1)
-    src_ctr_x = src_ctr_x.reshape(-1,1)
-
 
     dy = loc[:, 0::4]
     dx = loc[:, 1::4]
@@ -67,11 +62,11 @@ def loc2bbox(src_bbox, loc):
 
     # src_ctr_x, src_ctr_y: Bbox中心点的坐标
     # src_width, src_height: Bbox的宽高
-    # print(src_width.shape)
-    # print(dx.shape)
-    # print(src_ctr_x.shape)
+    print(src_width.shape)
+    print(dx.shape)
+    print(src_ctr_x.shape)
     ctr_y = src_width * dx + src_ctr_x
-    # print(ctr_y.shape)
+    print(ctr_y.shape)
     ctr_x = src_height * dy + src_ctr_y
     h = src_width * np.exp(dw)
     w = src_height * np.exp(dh)

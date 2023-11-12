@@ -101,5 +101,5 @@ def vis_bbox(img, bbox, label=None, score=None, ax=None):
                     ': '.join(caption),
                     style='italic',
                     bbox={'facecolor': 'white', 'alpha': 0.5, 'pad': 0})
-    ax.figure.savefig('/content/gdrive/MyDrive/Fudan/CV-object-detection/Faster R-CNN/imgs/demo_result.jpg')
+    ax.figure.savefig('imgs/demo_result.jpg')
     return ax
