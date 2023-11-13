@@ -36,9 +36,12 @@ def decoder(pred):
     pred = pred.squeeze(0)  # torch.Size([14, 14, 30])
     # [中心坐标,长宽,置信度,中心坐标,长宽,置信度, 20个类别] x 7x7
     # 从pred中取出bbox1的置信度
-    contain1 = pred[:,:,4]
+    contain1 = pred[:,:,4:5]
+    # print(contain1.shape)
     # 从pred中取出bbox2的置信度
-    contain2 = pred[:,:,9]
+    contain2 = pred[:,:,9:10]
+    # print(contain2.shape)
+
     contain = torch.cat((contain1, contain2), 2) # torch.Size([14, 14, 2])
 
     mask1 = contain > 0.1 # 大于阈值, torch.Size([14, 14, 2]) content: tensor([False, False])
@@ -53,7 +56,7 @@ def decoder(pred):
                     # 从pred中取出bbox的中心坐标及宽高
                     box = pred[i,j,b*5:b*5+4]
                     # 从pred中取出bbox的置信度
-                    contain_prob = pred[i,j,b*5+4]
+                    contain_prob = pred[i,j,b*5+4:b*5+5]
                     xy = torch.FloatTensor([j, i]) * cell_size # cell左上角 up left of cell
                     box[:2] = box[:2] * cell_size + xy # return cxcy relative to image
                     box_xy = torch.FloatTensor(box.size()) # 转换成xy形式 convert[cx, cy, w, h] to [x1, y1, x2, y2]
@@ -64,11 +67,12 @@ def decoder(pred):
                     box_xy[2:] = box[:2] + box[2:]/2
                     # 从pred中取出20个类别的概率，并得到最大值及其索引
                     related_index = torch.argmax(pred[i,j,10:])
-                    max_prob, cls_index = pred[i,j,10+related_index], related_index
+                    max_prob, cls_index = pred[i,j,10+related_index:11+related_index], related_index
                     if float((contain_prob * max_prob)[0]) > 0.1:
                         boxes.append(box_xy.view(1, 4))
                         cls_indexs.append(cls_index.item())
                         probs.append(contain_prob * max_prob)
+    print(len(boxes))
     if len(boxes) == 0:
         boxes = torch.zeros((1, 4))
         probs = torch.zeros(1)
@@ -94,6 +98,7 @@ def nms(bboxes, scores, threshold=0.5):
     _, order = scores.sort(0, descending=True) # 降序排列score
     keep = []
     while order.numel() > 0: # torch.numel()返回张量元素个数
+        # print(f"order now: {order.numel()}")
         if order.numel() == 1: # 保留框只剩一个
             i = order
             keep.append(i)
@@ -103,11 +108,20 @@ def nms(bboxes, scores, threshold=0.5):
 
         # 计算box[i]与其余各框box[order[1:]]的IOU
         intersect_ul_points = torch.max(bboxes[i,:2], bboxes[order[1:],:2])
-        intersect_dr_points = torch.max(bboxes[i,2:], bboxes[order[1:],2:])
+        # print(f"intersect_ul_points: {intersect_ul_points}")
+        intersect_dr_points = torch.min(bboxes[i,2:], bboxes[order[1:],2:])
+        # print(f"intersect_dr_points: {intersect_dr_points}")
         diffs = intersect_dr_points - intersect_ul_points
+        # print(f"diffs: {diffs}")
         intersect_areas = diffs[:,0] * diffs[:,1]
+        # print(f"intersect_areas: {intersect_areas}")
+        # print(f"areas[i] + areas[order[1:]: {areas[i] + areas[order[1:]]}")
+        # print(f"area: {areas}")
         ovr = intersect_areas / (areas[i] + areas[order[1:]] - intersect_areas)
+        
+        # print(f"ovr: {ovr}")
         ids = (ovr <= threshold).nonzero(as_tuple=False).squeeze() # 注意此时idx为[N - 1,], 而order为[N, ]
+        # print(ids)
         if ids.numel() == 0:
             break
         order = order[ids + 1] # 修补索引之间的差值
@@ -147,9 +161,13 @@ def predict(model, image):
 if __name__ == "__main__":
     model = resnet50()
     print("load model...")
-    model.load_state_dict(torch.load("./yolo.pth"))
+    model.load_state_dict(
+      torch.load(
+        "/content/gdrive/MyDrive/Fudan/yolo.pth"
+      )
+    )
     model.eval()
-    image_name = "imgs/demo.jpg"
+    image_name = "/content/gdrive/MyDrive/Fudan/CV-object-detection/YOLO/imgs/demo.jpg"
     image = cv2.imread(image_name)
     print("predicting...")
     result = predict(model, image)
@@ -163,4 +181,4 @@ if __name__ == "__main__":
         cv2.rectangle(image, (p1[0] - 2//2, p1[1] - 2 - baseline), (p1[0] + text_size[0], p1[1] + text_size[1]), color, -1)
         cv2.putText(image, label, (p1[0], p1[1] + baseline), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1, 8)
 
-    cv2.imwrite("imgs/demo_result.jpg", image)
+    cv2.imwrite("/content/gdrive/MyDrive/Fudan/CV-object-detection/YOLO/imgs/demo_result.jpg", image)
